@@ -1,0 +1,25 @@
+import { Body, Controller, Get, Headers, Post, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AuthService } from './auth.service';
+import { LoginDto } from './dto/login.dto';
+
+@Controller('auth')
+export class AuthController {
+  constructor(private readonly authService: AuthService) {}
+
+  @Post('login')
+  login(@Body() body: LoginDto, @Headers('x-tenant-slug') tenantSlug?: string) {
+    return this.authService.login(
+      body.email,
+      body.password,
+      tenantSlug || process.env.DEFAULT_TENANT_SLUG || 'demo-institute'
+    );
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('me')
+  me(@CurrentUser() user: { sub: string }) {
+    return this.authService.me(user.sub);
+  }
+}

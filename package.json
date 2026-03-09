@@ -1,0 +1,24 @@
+{
+  "name": "trainstack-ai",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "npm-run-all --parallel dev:api dev:web",
+    "dev:api": "npm --workspace @trainstack/api run start:dev",
+    "dev:web": "npm --workspace @trainstack/web run dev",
+    "build": "npm run build -ws",
+    "lint": "npm run lint -ws --if-present",
+    "test": "npm run test -ws --if-present",
+    "prisma:generate": "npm --workspace @trainstack/api run prisma:generate",
+    "prisma:migrate": "npm --workspace @trainstack/api run prisma:migrate",
+    "prisma:seed": "npm --workspace @trainstack/api run prisma:seed"
+  },
+  "devDependencies": {
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.6.3"
+  }
+}

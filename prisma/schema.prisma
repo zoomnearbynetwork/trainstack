@@ -1,0 +1,271 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Plan {
+  STARTER
+  GROWTH
+  PRO
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  INSTITUTE_ADMIN
+  COUNSELOR
+  TRAINER
+  MARKETING_MANAGER
+  STUDENT
+}
+
+model Tenant {
+  id          String      @id @default(cuid())
+  name        String
+  slug        String      @unique
+  plan        Plan        @default(STARTER)
+  status      String      @default("active")
+  settingsJson Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  users       User[]
+  courses     Course[]
+  leads       Lead[]
+  websites    Website[]
+  students    Student[]
+  campaigns   Campaign[]
+  conversations Conversation[]
+}
+
+model User {
+  id           String      @id @default(cuid())
+  tenantId     String
+  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name         String
+  email        String
+  passwordHash String
+  role         UserRole
+  status       String      @default("active")
+  lastLoginAt  DateTime?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  batches      Batch[]     @relation("TrainerBatches")
+  assignedLeads Lead[]     @relation("AssignedLeadUser")
+  auditLogs    AuditLog[]
+
+  @@unique([tenantId, email])
+}
+
+model Website {
+  id                 String       @id @default(cuid())
+  tenantId           String
+  tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name               String
+  domain             String?
+  status             String       @default("draft")
+  publishedVersionId String?
+  pages              WebsitePage[]
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+}
+
+model WebsitePage {
+  id             String   @id @default(cuid())
+  websiteId      String
+  website        Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  title          String
+  slug           String
+  pageType       String
+  seoTitle       String?
+  seoDescription String?
+  contentJson    Json
+  isPublished    Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([websiteId, slug])
+}
+
+model Course {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title       String
+  slug        String
+  category    String?
+  level       String?
+  duration    String?
+  price       Decimal?  @db.Decimal(10, 2)
+  description String?
+  status      String    @default("draft")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  batches     Batch[]
+  leads       Lead[]
+
+  @@unique([tenantId, slug])
+}
+
+model Batch {
+  id           String    @id @default(cuid())
+  courseId      String
+  course        Course    @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  trainerId     String?
+  trainer       User?     @relation("TrainerBatches", fields: [trainerId], references: [id], onDelete: SetNull)
+  mode          String
+  startDate     DateTime
+  endDate       DateTime?
+  scheduleJson  Json
+  capacity      Int
+  status        String    @default("scheduled")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  enrollments   Enrollment[]
+}
+
+model Student {
+  id          String      @id @default(cuid())
+  tenantId    String
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fullName    String
+  email       String?
+  phone       String?
+  enrolledAt  DateTime?
+  status      String      @default("active")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  enrollments Enrollment[]
+}
+
+model Enrollment {
+  id              String    @id @default(cuid())
+  studentId       String
+  batchId         String
+  student         Student   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  batch           Batch     @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  paymentStatus   String    @default("pending")
+  progressPercent Int       @default(0)
+  certificateUrl  String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([studentId, batchId])
+}
+
+model Lead {
+  id                 String         @id @default(cuid())
+  tenantId           String
+  tenant             Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fullName           String
+  email              String?
+  phone              String?
+  source             String?
+  status             String         @default("new")
+  score              Int            @default(0)
+  interestedCourseId String?
+  interestedCourse   Course?        @relation(fields: [interestedCourseId], references: [id], onDelete: SetNull)
+  assignedToId       String?
+  assignedTo         User?          @relation("AssignedLeadUser", fields: [assignedToId], references: [id], onDelete: SetNull)
+  notes              String?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  activities         LeadActivity[]
+  conversations      Conversation[]
+}
+
+model LeadActivity {
+  id         String   @id @default(cuid())
+  leadId      String
+  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  type        String
+  metaJson    Json?
+  createdById String?
+  createdAt   DateTime @default(now())
+}
+
+model Campaign {
+  id          String         @id @default(cuid())
+  tenantId    String
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name        String
+  channel     String
+  triggerType String
+  status      String         @default("draft")
+  configJson  Json
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  runs        CampaignRun[]
+}
+
+model CampaignRun {
+  id          String    @id @default(cuid())
+  campaignId  String
+  campaign    Campaign  @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  targetType  String
+  targetId    String
+  status      String    @default("queued")
+  executedAt  DateTime?
+  resultJson  Json?
+  createdAt   DateTime  @default(now())
+}
+
+model Conversation {
+  id               String    @id @default(cuid())
+  tenantId         String
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leadId           String?
+  lead             Lead?     @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  channel          String
+  externalThreadId String?
+  status           String    @default("open")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  messages         Message[]
+}
+
+model Message {
+  id                String       @id @default(cuid())
+  conversationId    String
+  conversation      Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  direction         String
+  content           String
+  contentType       String       @default("text")
+  providerMessageId String?
+  createdAt         DateTime     @default(now())
+}
+
+model AiPrompt {
+  id              String   @id @default(cuid())
+  tenantId        String?
+  key             String
+  version         Int
+  template        String
+  modelConfigJson Json?
+  createdAt       DateTime @default(now())
+
+  @@unique([tenantId, key, version])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actorId     String?
+  actor       User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  entityType  String
+  entityId    String
+  action      String
+  metaJson    Json?
+  createdAt   DateTime @default(now())
+}
