@@ -3,21 +3,26 @@ version: "3.9"
 services:
   postgres:
     image: postgres:16
-    container_name: trainstack-postgres
+    # Do not set container_name; let Docker manage it automatically
     environment:
       POSTGRES_DB: trainstack
       POSTGRES_USER: trainstack
       POSTGRES_PASSWORD: trainstack
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    # Only internal; no public port mapping for security
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
+      interval: 10s
+      retries: 5
 
   redis:
     image: redis:7
-    container_name: trainstack-redis
-    ports:
-      - "6379:6379"
+    # Only internal; no public port mapping for security
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      retries: 5
 
   api:
     build:
@@ -28,9 +33,11 @@ services:
       DATABASE_URL: postgresql://trainstack:trainstack@postgres:5432/trainstack
       REDIS_URL: redis://redis:6379
       PORT: 4000
-    depends_on: [postgres, redis]
-    ports:
-      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   worker:
     build:
@@ -41,7 +48,11 @@ services:
     environment:
       DATABASE_URL: postgresql://trainstack:trainstack@postgres:5432/trainstack
       REDIS_URL: redis://redis:6379
-    depends_on: [postgres, redis]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   web:
     build:
@@ -49,16 +60,23 @@ services:
       dockerfile: infrastructure/docker/Dockerfile.web
     env_file: [.env]
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
-    depends_on: [api]
-    ports:
-      - "3000:3000"
+      # The API is reachable via the internal Docker network; do not reference localhost inside a container
+      NEXT_PUBLIC_API_URL: http://api:4000/api/v1
+    depends_on:
+      api:
+        condition: service_healthy
 
   nginx:
     image: nginx:alpine
-    depends_on: [api, web]
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    # Expose nginx as the only public entrypoint
     ports:
-      - "8080:80"
+      - "80:80"
+      - "443:443"
     volumes:
       - ./infrastructure/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
 
